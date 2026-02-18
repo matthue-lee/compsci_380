@@ -4,6 +4,7 @@ import argparse
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import Counter
 from pathlib import Path
 
@@ -34,6 +35,34 @@ AA3_TO_AA1 = {
     "PYL": "O",
     "MSE": "M",
 }
+
+ALLOWED_HETATM_RESIDUES = set(AA3_TO_AA1.keys())
+
+
+def sanitize_pdb_file(pdb_path):
+    """Create a mkdssp-friendly temporary PDB without unsupported HETATMs."""
+
+    with pdb_path.open("r", encoding="utf-8", errors="ignore") as source, tempfile.NamedTemporaryFile(
+        "w", suffix=".pdb", delete=False
+    ) as handle:
+        for line in source:
+            record = line[:6].strip().upper()
+            keep_line = False
+
+            if record == "ATOM":
+                keep_line = True
+            elif record == "HETATM":
+                residue = line[17:20].strip().upper()
+                keep_line = residue in ALLOWED_HETATM_RESIDUES
+            elif record in {"TER", "END", "ENDMDL", "MODEL"}:
+                keep_line = True
+
+            if keep_line:
+                handle.write(line)
+
+        temp_path = Path(handle.name)
+
+    return temp_path
 
 
 def parse_args():
@@ -86,23 +115,28 @@ def gather_pdb_files(pdb_dir):
 
 
 def run_dssp_on_file(pdb_path, mkdssp_path):
-    cmd = [mkdssp_path, "--output-format", "dssp", str(pdb_path)]
+    sanitized_pdb = sanitize_pdb_file(pdb_path)
     try:
-        proc = subprocess.run(
-            cmd,
-            check=True,
-            capture_output=True,
-            text=True,
-        )
-    except FileNotFoundError as exc:
-        raise RuntimeError(
-            f"mkdssp executable not found: {mkdssp_path}"
-        ) from exc
-    except subprocess.CalledProcessError as exc:
-        stderr = (exc.stderr or "").strip()
-        raise RuntimeError(
-            f"mkdssp failed for {pdb_path}: {stderr or exc}"
-        ) from exc
+        cmd = [mkdssp_path, "--output-format", "dssp", str(sanitized_pdb)]
+        try:
+            proc = subprocess.run(
+                cmd,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError(
+                f"mkdssp executable not found: {mkdssp_path}"
+            ) from exc
+        except subprocess.CalledProcessError as exc:
+            stderr = (exc.stderr or "").strip()
+            raise RuntimeError(
+                f"mkdssp failed for {pdb_path}: {stderr or exc}"
+            ) from exc
+    finally:
+        if sanitized_pdb.exists():
+            sanitized_pdb.unlink()
 
     entries = []
     lines = proc.stdout.splitlines()
@@ -177,7 +211,15 @@ def main():
         sys.exit(1)
 
     summary_path = analysis_dir / "DSSP_outputs.txt"
-    summary_handle = summary_path.open("a", encoding="utf-8")
+    summary_records = {}
+    if summary_path.exists():
+        with summary_path.open("r", encoding="utf-8") as existing_handle:
+            for line in existing_handle:
+                line = line.strip()
+                if not line:
+                    continue
+                identifier = line.split("\t", 1)[0]
+                summary_records[identifier] = line
 
     processed = 0
     for pdb_file in pdb_files:
@@ -201,13 +243,15 @@ def main():
 
         stats = compute_summary(ss_sequence, length)
         H, B, E, G, I, T, S, helix_pct, beta_pct, big_pct = stats
-        summary_handle.write(
+        summary_records[identifier] = (
             f"{identifier}\t{length}\t{H}\t{B}\t{E}\t{G}\t{I}\t{T}\t{S}\t"
-            f"{helix_pct:.6f}\t{beta_pct:.6f}\t{big_pct:.6f}\n"
+            f"{helix_pct:.6f}\t{beta_pct:.6f}\t{big_pct:.6f}"
         )
         processed += 1
 
-    summary_handle.close()
+    with summary_path.open("w", encoding="utf-8") as summary_handle:
+        for identifier in sorted(summary_records):
+            summary_handle.write(f"{summary_records[identifier]}\n")
 
     if processed == 0:
         print("No structures were processed successfully", file=sys.stderr)

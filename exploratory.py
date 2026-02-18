@@ -11,12 +11,10 @@ import seaborn as sns
 DATA_PATH = Path(__file__).with_name("dataset.csv")
 OUTPUT_DIR = Path("figures")
 NUMERIC_COLUMNS = [
-    "Rank",
     "N",
     "Fmax_eps_per_A",
     "Ln_A",
     "Lm_A",
-    "Lf_A",
 ]
 CATEGORY_COLUMNS = ["Pattern", "CATH"]
 
@@ -93,7 +91,7 @@ def plot_pairwise_relationships(df: pd.DataFrame) -> None:
     subset = df[numeric_present + ["Pattern"]].copy()
     g = sns.pairplot(
         subset,
-        vars=[column for column in numeric_present if column != "Rank"],
+        vars=numeric_present,
         hue="Pattern",
         corner=True,
         diag_kind="hist",
