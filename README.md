@@ -110,6 +110,4 @@ python3 nonlinear_models.py \
   needed.
 - `figures/` is reused across exploratory and model scripts—clean it manually
   if you want a fresh set of outputs.
-- Use `python3 -m py_compile <script>.py` to sanity-check syntax before running
-  longer pipelines.
 
