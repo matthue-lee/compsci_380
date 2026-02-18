@@ -14,9 +14,8 @@ distributions, and training baseline models that predict
 - `filter_master_table.py` – selects beta-rich rows into `master_table_beta.csv`
   (default: `ss_fraction_strand >= 0.4`).
 - `exploratory.py` – generates summary statistics and plots in `figures/`.
-- `linear_baselines.py` – trains mean-imputed ridge/lasso baselines implemented
-  from scratch (no external ML dependencies).
-- `nonlinear_models.py` – trains Random Forest and (optionally) XGBoost models
+- `linear_baselines.py` – trains mean-imputed ridge/lasso baselines
+- `nonlinear_models.py` – trains Random Forest and XGBoost models
   via scikit-learn, producing metrics and feature-importance plots.
 - `pdb_helpers/` – helper scripts and downloaded assets (PDB files, FASTA,
   DSSP summaries) referenced by the master-table builder.
@@ -27,7 +26,7 @@ distributions, and training baseline models that predict
 python3 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
-pip install pandas numpy matplotlib seaborn scikit-learn xgboost
+pip install -r requirements.txt
 ```
 
 - `linear_baselines.py` only needs the Python standard library.
